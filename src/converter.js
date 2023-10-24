@@ -4,7 +4,6 @@ import installer from '@ffmpeg-installer/ffmpeg';
 import { createWriteStream } from 'fs';
 import { dirname, resolve } from 'path';
 import { fileURLToPath } from 'url';
-import { removeFile } from './utils.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -22,7 +21,6 @@ class OggConverter {
                     .inputOption('-t 30')
                     .output(outputPath)
                     .on('end', () => {
-                        removeFile(input);
                         resolve(outputPath);
                     })
                     .on('error', (error) => reject(error.message))

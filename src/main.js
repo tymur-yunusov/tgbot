@@ -4,12 +4,14 @@ import { code } from 'telegraf/format';
 import config from 'config';
 import { converter } from './converter.js';
 import { openai } from './openai.js';
+import { removeFile } from './utils.js';
+import { textConverter } from './text.js';
 
 const INITIAL_SESSION = {
     messages: [],
 };
 
-const bot = new Telegraf(config.get('TELEGRAM_TOKEN'));
+const bot = new Telegraf(config.get('TELEGRAM_TOKEN'), { handlerTimeout: Infinity });
 bot.use(session());
 
 bot.command('new', async (context) => {
@@ -32,18 +34,31 @@ bot.on(message('voice'), async (context) => {
         const userId = String(context.message.from.id);
         const oggPath = await converter.create(link.href, userId);
         const mp3Path = await converter.toMp3(oggPath, userId);
+
+        removeFile(oggPath);
+
         const text = await openai.transcription(mp3Path);
-        await context.reply(code(`Ваш запрос: ${text}`));
+
+        removeFile(mp3Path);
+        await context.reply(code(`Запрос: ${text}`));
 
         context.session.messages.push({ role: openai.roles.USER, content: text });
-        const response = await openai.chat(messages);
+        const response = await openai.chat(context.session.messages);
 
         context.session.messages.push({
             role: openai.roles.ASSISTANT,
             content: response.message.content,
         });
 
+        const audio = await textConverter.textToSpeech(response.message.content);
         await context.reply(response.message.content);
+        await context.sendAudio(
+            { source: audio },
+            {
+                title: 'Ответ киборга',
+                performer: 'ChatGPT',
+            }
+        );
     } catch (error) {
         console.log(`Error while voice message ${error.message}`);
     }
@@ -64,7 +79,16 @@ bot.on(message('text'), async (context) => {
             content: response.message.content,
         });
 
+        const audio = await textConverter.textToSpeech(response.message.content);
+
         await context.reply(response.message.content);
+        await context.sendAudio(
+            { source: audio },
+            {
+                title: 'Ответ киборга',
+                performer: 'ChatGPT',
+            }
+        );
     } catch (error) {
         console.log(`Error while text message ${error.message}`);
     }
